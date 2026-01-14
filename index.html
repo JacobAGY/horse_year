@@ -946,9 +946,11 @@ function rebuildIdiomTargets(text){
   idiomGeo.computeBoundingSphere();
   envHomeRingR = Math.max(2.8, Math.min(5.6, (idiomGeo.boundingSphere?.radius || 3.6) * 1.10));
   
-  // ✅ HAPPY NEW YEAR 时重置旋转角度为0
+  // ✅ HAPPY NEW YEAR 时重置旋转角度为0，并直接定位粒子（不聚拢）
   if(text === "HAPPY NEW YEAR"){
     idiomGroup.rotation.y = 0;
+    // 直接让粒子定位到目标位置，不需要聚拢动画
+    nudgeParticlesTowardTargets(1.0);
   }
   
   // 更新解释文字
@@ -1179,7 +1181,10 @@ function updateExplanationText(idiomText){
 
 // 初始成语：稳定、快速成型
 rebuildIdiomTargets(selectedIdiom);
-nudgeParticlesTowardTargets(0.78);
+// ✅ HAPPY NEW YEAR 在rebuildIdiomTargets中已经直接定位，不需要再次定位
+if(selectedIdiom !== "HAPPY NEW YEAR"){
+  nudgeParticlesTowardTargets(0.78);
+}
 
 // ---------------------------
 // 红包系统：围绕成语 3D 包裹 + 慢速布朗运动；降低旋转速度
@@ -1722,20 +1727,26 @@ function computeGesture(lm){
   const openHand = (extCount >= 4);
   const closeHand = (extCount <= 1);
 
-  const dTI = dist2(lm[4], lm[8]) / handSize;
-  const dTM = dist2(lm[4], lm[12]) / handSize;
-  const dIM = dist2(lm[8], lm[12]) / handSize;
-  const pinch3 = (dTI < 0.33 && dTM < 0.35 && dIM < 0.34);
+  // 计算三个关键点之间的距离（归一化）- 参考代码
+  const dTI = dist2(lm[4], lm[8]) / handSize;   // 拇指尖到食指尖的距离
+  const dTM = dist2(lm[4], lm[12]) / handSize; // 拇指尖到中指尖的距离
+  const dIM = dist2(lm[8], lm[12]) / handSize;  // 食指尖到中指尖的距离
+  
+  // 三指捏合判断：三个距离都小于阈值（参考代码的阈值）
+  // 排除握拳状态：握拳时extCount <= 1，三指捏合时应该至少有2个手指伸出
+  const pinch3 = (dTI < 0.33 && dTM < 0.35 && dIM < 0.34) && (extCount > 1);
 
   return { openHand, closeHand, pinch3 };
 }
 
 let prevPinch=false;
 let pinchCooldown=0;
+let closeHandLockSec = 0;  // ✅ 握拳锁定时间，在此期间禁用三指捏合
 
-// ✅ 关键：凝聚只触发一次（需要握拳保持一小段时间），避免“闪现其他成语”
+// ✅ 关键：凝聚只触发一次（需要握拳保持一小段时间），避免"闪现其他成语"
 function handleGestureStable(g, dt){
   mergeCooldownSec = Math.max(0, mergeCooldownSec - dt);
+  closeHandLockSec = Math.max(0, closeHandLockSec - dt);  // ✅ 更新握拳锁定时间
   
   // 第一次检测到手势动作时，从 "HAPPY NEW YEAR" 切换到成语
   if(!hasSwitchedToIdioms && (g.openHand || g.closeHand || g.pinch3)){
@@ -1762,17 +1773,21 @@ function handleGestureStable(g, dt){
 
   if(g.closeHand){
     closeHoldSec += dt;
+    // ✅ 握拳时锁定三指捏合检测，防止误触
+    closeHandLockSec = 0.25;  // 握拳后0.25秒内禁用三指捏合
   }else{
     closeHoldSec = 0;
   }
 
-  // 三指捏合：抓红包（独立于散/聚）
-  pinchCooldown = Math.max(0, pinchCooldown - dt);
-  const pinchEdge = g.pinch3 && !prevPinch;
-  prevPinch = g.pinch3;
-  if(pinchEdge && pinchCooldown<=0){
-    triggerRedPacketFlow();
-    pinchCooldown = 0.60;
+  // 三指捏合：抓红包
+  pinchCooldown = Math.max(0, pinchCooldown - dt);  // 冷却时间递减
+  const pinchEdge = g.pinch3 && !prevPinch;  // 检测从非捏合到捏合的边缘
+  prevPinch = g.pinch3;  // 记录当前状态
+  
+  // 如果检测到捏合边缘且冷却时间已过，且未在握拳锁定期间，触发红包流程
+  if(pinchEdge && pinchCooldown<=0 && closeHandLockSec <= 0 && !g.closeHand){
+    triggerRedPacketFlow();  // 触发抽红包
+    pinchCooldown = 0.30;  // 设置0.3秒冷却时间，防止重复触发
   }
 
   // 握拳凝聚：要求 “从散开进入” + “握拳保持” + “冷却结束”
@@ -1907,6 +1922,7 @@ btnReset.addEventListener("click", ()=>{
   closeHoldSec = 0;
   mergeCooldownSec = 0;
   mergeBoost = 0;
+  closeHandLockSec = 0;  // ✅ 重置握拳锁定
 
   setMode(Mode.MERGE);
   statusText.textContent="已重置：凝聚态（稳定成语 + 红包环绕）";
@@ -2006,6 +2022,25 @@ function updateIdiom(dt, time){
   mergeBoost = Math.max(0, mergeBoost - dt*2.2);
 
   const scatter01 = clamp((mix - 0.10)/0.90, 0, 1);
+
+  // ✅ HAPPY NEW YEAR 直接定位到目标位置，不需要聚拢动画
+  if(selectedIdiom === "HAPPY NEW YEAR"){
+    // 直接让所有粒子定位到目标位置
+    for(let i=0;i<activeCount;i++){
+      aPos[i*3+0] = aTar[i*3+0];
+      aPos[i*3+1] = aTar[i*3+1];
+      aPos[i*3+2] = aTar[i*3+2];
+      aVel[i*3+0] = 0;
+      aVel[i*3+1] = 0;
+      aVel[i*3+2] = 0;
+    }
+    idiomGeo.attributes.position.needsUpdate = true;
+    idiomGeo.attributes.aVel.needsUpdate = true;
+    idiomMat.uniforms.uTime.value = time;
+    idiomMat.uniforms.uMix.value = mix;
+    idiomMat.uniforms.uFocus.value = focus;
+    return; // 跳过后续的聚拢动画逻辑
+  }
 
   for(let i=0;i<activeCount;i++){
     const px=aPos[i*3+0], py=aPos[i*3+1], pz=aPos[i*3+2];
