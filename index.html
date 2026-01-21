@@ -138,9 +138,9 @@
     .focusOverlay{
       position:absolute; inset:0;
       display:flex;
-      align-items:flex-end;
+      align-items:center;           /* 居中对齐，让祝福与成语位置一致 */
       justify-content:center;
-      padding:16px 12px 22px;
+      padding:0;
       pointer-events:none;
       opacity:0;
       transform: translate3d(0, 10px, 0);
@@ -205,7 +205,7 @@
       position:absolute;
       left:50%; top:50%;
       transform:translate(-50%,-52%);
-      font-size:32px;
+      font-size:36px;
       font-weight:900;
       color:rgba(140,10,30,.98);
       text-shadow:0 2px 4px rgba(0,0,0,.35);
@@ -225,9 +225,9 @@
       100%{ transform: rotateX(-125deg); }
     }
 
-    .focusTextWrap{ flex:1 1 320px; min-width:260px; }
-    .focusTitle{ margin:0; font-size:15px; letter-spacing:.5px; font-weight:900; }
-    .focusLine{ margin:8px 0 0; font-size:14px; line-height:1.6; color: rgba(255,255,255,.88); white-space:pre-wrap; }
+    .focusTextWrap{ flex:1 1 320px; min-width:260px; text-align:center; }
+    .focusTitle{ margin:0; font-size:31px; letter-spacing:.5px; font-weight:900; }
+    .focusLine{ margin:8px 0 0; font-size:30px; line-height:1.6; color: rgba(255,255,255,.88); white-space:pre-wrap; text-align:center; }
 
     .videoWrap{
       margin-top:12px;
@@ -787,8 +787,9 @@ const MA_TEX = makeMaGlyphTexture();
 // 成语采样：描边为主、填充为辅（轮廓清晰）
 // ---------------------------
 function sampleTextPointsStrokeFill(text, {
-  fontSize = 190,
-  worldWidth = 7.8,
+  // 中间成语更醒目：略放大字号与宽度
+  fontSize = 210,
+  worldWidth = 8.4,
   strokeStep = IS_MOBILE ? 4 : 3,
   fillStep   = IS_MOBILE ? 10 : 8,
   strokeThreshold = 12,
@@ -905,11 +906,15 @@ for(let i=0;i<MAX_PARTICLES;i++){
 }
 
 function rebuildIdiomTargets(text){
-  // ✅ HAPPY NEW YEAR 使用标准样式参数
-  const isHappyNewYear = text === "HAPPY NEW YEAR";
+  // ✅ 所有文字使用统一字号 220px（调大两个字号）
+  // 原始值：fontSize = 190, worldWidth = 7.9 (桌面) / 7.0 (移动)
+  const fontSize = 220;
+  // 按 fontSize 比例调整 worldWidth，保持 scale = worldWidth/cssW 的比例不变
+  const fontSizeRatio = fontSize / 190;  // 相对于原始 190px 的比例
+  const worldWidth = fontSizeRatio * (IS_MOBILE ? 7.0 : 7.9);
   const pts = sampleTextPointsStrokeFill(text, {
-    fontSize: 190, // 标准字号 190px
-    worldWidth: IS_MOBILE ? 7.0 : 7.9,
+    fontSize: fontSize,
+    worldWidth: worldWidth,
     strokeStep: IS_MOBILE ? 4 : 3, // 描边采样步长：3px（桌面）或 4px（移动端）
     fillStep:   IS_MOBILE ? 10 : 8, // 填充采样步长：8px（桌面）或 10px（移动端）
     fillKeepProb: IS_MOBILE ? 0.22 : 0.26, // 标准填充保留概率
@@ -1063,16 +1068,23 @@ function createExplanationTexture(text){
   const fontSize = IS_MOBILE ? 20 : 28;
   const fontFamily = "'Georgia', 'Times New Roman', 'serif', 'ui-serif', 'Palatino'";
   const fontWeight = "400"; // 正常粗细，更优雅
-  const letterSpacing = "0.05em"; // 增加字母间距
+  const lineHeight = fontSize * 1.2; // 行高
   
-  // 先测量文字尺寸（临时字体设置）
+  // 处理多行：按换行符拆分
+  const lines = String(text || "").split(/\r?\n/);
+  
+  // 先测量最大行宽（临时字体设置）
   ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   
-  const metrics = ctx.measureText(text);
-  const textWidth = metrics.width;
-  const textHeight = fontSize * 1.2; // 增加行高
+  let maxLineWidth = 0;
+  for(const line of lines){
+    const metrics = ctx.measureText(line);
+    maxLineWidth = Math.max(maxLineWidth, metrics.width);
+  }
+  const textWidth = maxLineWidth;
+  const textHeight = lineHeight * lines.length;
   
   // 设置画布尺寸（添加padding）
   const padding = 30;
@@ -1085,7 +1097,7 @@ function createExplanationTexture(text){
   ctx.textBaseline = "middle";
   
   const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
+  const startY = (canvas.height - textHeight) / 2 + lineHeight / 2;
   
   // 绘制多层效果：使用金色系配色，与粒子成语协调
   // 1. 绘制外阴影（深金色阴影，与主题匹配）
@@ -1097,7 +1109,10 @@ function createExplanationTexture(text){
   // 2. 绘制文字描边（金色描边）
   ctx.strokeStyle = "rgba(255, 215, 100, 0.85)"; // 亮金色描边
   ctx.lineWidth = 2.5;
-  ctx.strokeText(text, centerX, centerY);
+  lines.forEach((line, idx) => {
+    const y = startY + idx * lineHeight;
+    ctx.strokeText(line, centerX, y);
+  });
   
   // 3. 创建金色渐变填充（与粒子成语的金色匹配）
   // 粒子金色：rgb(212, 176, 56) = vec3(0.83, 0.69, 0.22)
@@ -1108,7 +1123,10 @@ function createExplanationTexture(text){
   gradient.addColorStop(1, "rgba(255, 235, 160, 0.92)"); // 底部：浅金色
   
   ctx.fillStyle = gradient;
-  ctx.fillText(text, centerX, centerY);
+  lines.forEach((line, idx) => {
+    const y = startY + idx * lineHeight;
+    ctx.fillText(line, centerX, y);
+  });
   
   // 重置阴影和样式
   ctx.shadowColor = "transparent";
@@ -1413,7 +1431,7 @@ const _obj = new THREE.Object3D();
 const _tmp = new THREE.Vector3();
 const _homeWorld = new THREE.Vector3();
 
-function updateEnvelopes(time, dt){
+function updateEnvelopes(time, dt, scatter01=0){
   if(envMeshes.length !== ENVELOPES) return; // 等待初始化完成
   
   for(let i=0;i<ENVELOPES;i++){
@@ -1443,7 +1461,9 @@ function updateEnvelopes(time, dt){
     const y = lerp(_tmp.y, sW.y, mix);
     const z = lerp(_tmp.z, sW.z, mix);
 
-    mesh.position.set(x,y,z);
+    // 散开态：根据手掌左右给一点视差偏移
+    const parallaxX = wallParallaxX * scatter01;
+    mesh.position.set(x + parallaxX, y, z);
     mesh.quaternion.copy(camera.quaternion);
 
     // 降低自旋
@@ -1702,6 +1722,35 @@ let handEnabled = false;
 let lastLandmarks = null;
 let lastLandmarksTs = 0;
 
+// ---------------------------
+// 散开态“图片墙”跟手左右移动：给后方头像/红包墙一点视差感
+// ---------------------------
+let palmXSm = 0.5;          // 0..1
+let wallParallaxX = 0;      // 世界单位偏移（作用于 envGroup）
+function getPalmCenterX01(lm){
+  // 取腕部 + 掌心骨架点（MCP）做近似掌心中心
+  const ids = [0, 5, 9, 13, 17];
+  let s = 0;
+  for(const id of ids) s += (lm[id]?.x ?? 0.5);
+  return s / ids.length;
+}
+function updateWallParallaxFromHand(dt, scatter01){
+  // 只在散开态明显时启用；否则回弹归零
+  const active = scatter01 > 0.35 && handEnabled && lastLandmarks && (performance.now()-lastLandmarksTs) < 180;
+  if(active){
+    const x01 = getPalmCenterX01(lastLandmarks);
+    // 轻微平滑，避免抖动
+    palmXSm = damp(palmXSm, x01, 10.0, dt);
+    // 前置摄像头通常是镜像画面：为保证“手往右 -> 墙往右”，这里反向映射
+    const xN = (0.5 - palmXSm) * 2.0; // -1..1
+    // 振幅：移动一点即可感知，但不抢戏
+    const target = clamp(xN * 0.65, -0.65, 0.65);
+    wallParallaxX = damp(wallParallaxX, target, 6.5, dt);
+  }else{
+    wallParallaxX = damp(wallParallaxX, 0, 4.5, dt);
+  }
+}
+
 function dist2(a,b){
   const dx=a.x-b.x, dy=a.y-b.y, dz=(a.z||0)-(b.z||0);
   return Math.sqrt(dx*dx+dy*dy+dz*dz);
@@ -1787,7 +1836,7 @@ function handleGestureStable(g, dt){
   // 如果检测到捏合边缘且冷却时间已过，且未在握拳锁定期间，触发红包流程
   if(pinchEdge && pinchCooldown<=0 && closeHandLockSec <= 0 && !g.closeHand){
     triggerRedPacketFlow();  // 触发抽红包
-    pinchCooldown = 0.30;  // 设置0.3秒冷却时间，防止重复触发
+    pinchCooldown = 0.5;    // 成功后等待0.5秒再允许下一次三指捏合
   }
 
   // 握拳凝聚：要求 “从散开进入” + “握拳保持” + “冷却结束”
@@ -2144,6 +2193,7 @@ function animate(){
 
   const scatter01 = clamp((mix - 0.10)/0.90, 0, 1);
   galaxy.update(time, scatter01);
+  updateWallParallaxFromHand(dt, scatter01);
 
   // 视频显示
   if(mode===Mode.SCATTER){
@@ -2183,7 +2233,7 @@ function animate(){
 
   applyCamera(dt, time);
   updateIdiom(dt, time);
-  updateEnvelopes(time, dt);
+  updateEnvelopes(time, dt, scatter01);
 
   bloomPass.strength = damp(bloomPass.strength, lerp(1.08, 0.92, scatter01), 2.8, dt);
   bloomPass.radius   = damp(bloomPass.radius,   0.62, 2.8, dt);
