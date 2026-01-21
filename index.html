@@ -906,9 +906,10 @@ for(let i=0;i<MAX_PARTICLES;i++){
 }
 
 function rebuildIdiomTargets(text){
-  // ✅ 所有文字使用统一字号 220px（调大两个字号）
+  // ✅ HAPPY NEW YEAR 使用更大字号，其他成语使用 220px
   // 原始值：fontSize = 190, worldWidth = 7.9 (桌面) / 7.0 (移动)
-  const fontSize = 220;
+  const isHappyNewYear = text === "HAPPY NEW YEAR";
+  const fontSize = isHappyNewYear ? 187 : 220;  // HAPPY NEW YEAR 缩小30%（208*0.9≈187px）
   // 按 fontSize 比例调整 worldWidth，保持 scale = worldWidth/cssW 的比例不变
   const fontSizeRatio = fontSize / 190;  // 相对于原始 190px 的比例
   const worldWidth = fontSizeRatio * (IS_MOBILE ? 7.0 : 7.9);
