@@ -481,10 +481,21 @@ let closeHoldSec = 0;              // 握拳持续时间（去抖）
 let openHoldSec = 0;               // 张开持续时间（去抖）
 let mergeCooldownSec = 0;          // 防止短时间重复触发
 let mergeBoost = 0;                // 凝聚阶段加速成型
+let modeChangeTime = 0;            // 模式切换的时间戳
+const MODE_MIN_DURATION = 1.0;     // 模式最小持续时间（秒）
 
 function setMode(next){
   if(mode === next) return;
+  
+  // 检查是否在最小持续时间内，如果是则不允许切换
+  const now = performance.now() / 1000;
+  if(modeChangeTime > 0 && (now - modeChangeTime) < MODE_MIN_DURATION){
+    return; // 在最小持续时间内，不允许切换模式
+  }
+  
+  const prevMode = mode;
   mode = next;
+  modeChangeTime = now; // 记录模式切换时间
 
   if(mode === Mode.MERGE){
     targetMix = 0;
@@ -1261,48 +1272,58 @@ let avatarTexturesLoaded = false;
 
 // 加载员工头像纹理
 async function loadAvatarTextures(){
-  if(avatarTexturesLoaded) return;
+  // 如果已经加载过头像且数量大于0，不再重复加载
+  if(avatarTexturesLoaded && avatarMaterials.length > 0){
+    return;
+  }
   
   avatarTexturesLoaded = true;
   const loader = new THREE.TextureLoader();
   
-  // 优先从 blesses 配置加载头像
+  // 从 blesses.json 中提取所有 employees 目录下的头像（用于环绕照片）
+  const employeeAvatars = new Set();
   if(Array.isArray(blesses) && blesses.length > 0){
-    for(let i = 0; i < blesses.length; i++){
-      const bless = blesses[i];
-      if(bless.avatar){
-        try{
-          const tex = await new Promise((resolve, reject) => {
-            loader.load(
-              bless.avatar,
-              resolve,
-              undefined,
-              reject
-            );
-          });
-          tex.colorSpace = THREE.SRGBColorSpace;
-          tex.minFilter = THREE.LinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false;
-          avatarTextures.push(tex);
-          
-          const mat = new THREE.MeshBasicMaterial({
-            map: tex,
-            transparent: true,
-            opacity: 0.98,
-            depthWrite: false,
-            depthTest: false,
-            toneMapped: false
-          });
-          avatarMaterials.push(mat);
-        }catch(e){
-          console.warn(`Failed to load avatar: ${bless.avatar}`, e);
-        }
+    blesses.forEach(b => {
+      if(b.avatar && b.avatar.startsWith('assets/images/employees/') && !b.avatar.includes('placeholder')){
+        employeeAvatars.add(b.avatar);
+      }
+    });
+  }
+  
+  // 加载所有员工头像（用于环绕照片）
+  if(employeeAvatars.size > 0){
+    for(const imgPath of employeeAvatars){
+      try{
+        const tex = await new Promise((resolve, reject) => {
+          loader.load(
+            imgPath,
+            resolve,
+            undefined,
+            reject
+          );
+        });
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        avatarTextures.push(tex);
+        
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.98,
+          depthWrite: false,
+          depthTest: false,
+          toneMapped: false
+        });
+        avatarMaterials.push(mat);
+      }catch(e){
+        console.warn(`Failed to load employee image: ${imgPath}`, e);
       }
     }
   }
   
-  // 如果配置中没有头像或加载失败，直接从 employees 目录加载（1.png 到 4.png）
+  // 如果仍然没有加载到头像，使用默认的 1-4.png 作为后备
   if(avatarMaterials.length === 0){
     const employeeImages = ["1.png", "2.png", "3.png", "4.png"];
     for(let i = 0; i < employeeImages.length; i++){
@@ -1418,22 +1439,18 @@ function initEnvelopeMeshes(){
   }
 }
 
-// 延迟初始化，等待头像加载
+// 等待 blesses 加载完成后再加载头像
 (async function(){
+  // 等待 blesses 加载（最多等待5秒）
+  let waitCount = 0;
+  while(blesses.length === 0 && waitCount < 50){
+    await new Promise(resolve => setTimeout(resolve, 100));
+    waitCount++;
+  }
+  
   await loadAvatarTextures();
   initEnvelopeMeshes();
 })();
-
-// 监听 blesses 加载完成，重新初始化
-let checkBlessesInterval = setInterval(() => {
-  if(blesses.length > 0 && !avatarTexturesLoaded){
-    loadAvatarTextures().then(() => {
-      initEnvelopeMeshes();
-      clearInterval(checkBlessesInterval);
-    });
-  }
-}, 500);
-setTimeout(() => clearInterval(checkBlessesInterval), 10000);
 
 const _obj = new THREE.Object3D();
 const _tmp = new THREE.Vector3();
@@ -1980,6 +1997,7 @@ btnReset.addEventListener("click", ()=>{
   mergeCooldownSec = 0;
   mergeBoost = 0;
   closeHandLockSec = 0;  // ✅ 重置握拳锁定
+  modeChangeTime = 0;    // 重置模式切换时间，允许立即切换
 
   setMode(Mode.MERGE);
   statusText.textContent="已重置：凝聚态（稳定成语 + 红包环绕）";
