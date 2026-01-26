@@ -191,25 +191,6 @@
       overflow:hidden;
       transform-origin: 50% 0%;
     }
-    .packet .seal{
-      position:absolute;
-      left:50%; top:54%;
-      width:62px; height:62px;
-      transform:translate(-50%,-50%);
-      border-radius:999px;
-      background: radial-gradient(circle at 30% 30%, rgba(255,245,220,.95), rgba(212,175,55,.92) 60%, rgba(90,60,10,.85) 100%);
-      box-shadow: 0 0 0 2px rgba(212,175,55,.20), 0 0 26px rgba(212,175,55,.45);
-    }
-    .packet .seal::after{
-      content:attr(data-glyph);
-      position:absolute;
-      left:50%; top:50%;
-      transform:translate(-50%,-52%);
-      font-size:36px;
-      font-weight:900;
-      color:rgba(140,10,30,.98);
-      text-shadow:0 2px 4px rgba(0,0,0,.35);
-    }
     .packet .lid{
       position:absolute;
       left:0; top:0;
@@ -226,6 +207,30 @@
     }
 
     .focusTextWrap{ flex:1 1 320px; min-width:260px; text-align:center; }
+    .focusTitleRow{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+    }
+    .focusSeal{
+      width:48px;
+      height:48px;
+      border-radius:999px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,245,220,.95), rgba(212,175,55,.92) 60%, rgba(90,60,10,.85) 100%);
+      box-shadow: 0 0 0 2px rgba(212,175,55,.20), 0 0 18px rgba(212,175,55,.45);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-shrink:0;
+    }
+    .focusSeal::after{
+      content:attr(data-glyph);
+      font-size:28px;
+      font-weight:900;
+      color:rgba(140,10,30,.98);
+      text-shadow:0 2px 4px rgba(0,0,0,.35);
+    }
     .focusTitle{ margin:0; font-size:31px; letter-spacing:.5px; font-weight:900; }
     .focusLine{ margin:8px 0 0; font-size:30px; line-height:1.6; color: rgba(255,255,255,.88); white-space:pre-wrap; text-align:center; }
 
@@ -284,11 +289,13 @@
       <div class="focusTop">
         <div id="packet" class="packet">
           <div class="lid"></div>
-          <div class="seal" data-glyph="福"></div>
         </div>
         <img id="focusAvatar" class="focusAvatar" alt="">
         <div class="focusTextWrap">
-          <h3 id="focusTitle" class="focusTitle">红包到 · 好运到</h3>
+          <div class="focusTitleRow">
+            <div class="focusSeal" data-glyph="福"></div>
+            <h3 id="focusTitle" class="focusTitle">红包到 · 好运到</h3>
+          </div>
           <div id="focusText" class="focusLine"></div>
         </div>
       </div>
@@ -547,8 +554,8 @@ function setPacketAvatarMode(avatarUrl, glyph="福"){
     packetEl.style.backgroundRepeat = "no-repeat";
   }
   if(packetLidEl){
-    // 盖子使用半透明背景，让头像可见
-    packetLidEl.style.background = "rgba(0,0,0,0.35)";
+    // 盖子使用透明背景，不遮挡头像
+    packetLidEl.style.background = "transparent";
   }
   if(packetSealEl){
     packetSealEl.setAttribute("data-glyph", glyph);
@@ -1837,7 +1844,7 @@ function handleGestureStable(g, dt){
   // 如果检测到捏合边缘且冷却时间已过，且未在握拳锁定期间，触发红包流程
   if(pinchEdge && pinchCooldown<=0 && closeHandLockSec <= 0 && !g.closeHand){
     triggerRedPacketFlow();  // 触发抽红包
-    pinchCooldown = 0.5;    // 成功后等待0.5秒再允许下一次三指捏合
+    pinchCooldown = 1.0;    // 成功后等待1秒再允许下一次三指捏合
   }
 
   // 握拳凝聚：要求 “从散开进入” + “握拳保持” + “冷却结束”
