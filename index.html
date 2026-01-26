@@ -352,15 +352,13 @@ let idiomMap = new Map(); // 成语文本 -> 解释的映射
   }
 })();
 
-const HORSE_VIDEOS = [
-  "assets/videos/horse1.mp4",
-  "assets/videos/horse2.mp4",
-  "assets/videos/horse3.mp4",
-  "assets/videos/horse4.mp4"
-];
-
 // 散开态马视频（webm）
 const HORSE_RUN_WEBM = "assets/video/horse.webm";
+
+// 红包奖励视频（直接使用 horse.webm）
+const HORSE_VIDEOS = [
+  "assets/video/horse.webm"
+];
 
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const DPR_CAP = IS_MOBILE ? 1.15 : 1.9;
@@ -1657,7 +1655,10 @@ const fireworks = new Fireworks();
 // ---------------------------
 // 红包开封流程（只由三指捏合触发）
 // ---------------------------
-function pickVideo(){ return HORSE_VIDEOS[Math.floor(Math.random()*HORSE_VIDEOS.length)]; }
+function pickVideo(){ 
+  // 直接使用 horse.webm
+  return HORSE_RUN_WEBM;
+}
 
 async function triggerRedPacketFlow(){
   if(mode !== Mode.FOCUS) setMode(Mode.FOCUS);
